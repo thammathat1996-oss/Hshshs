@@ -1,0 +1,425 @@
+```html
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>สถาบันการศึกษา (Cyberpunk Final)</title>
+    <!-- โหลดไลบรารี Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@200;300;400;500;600;800&display=swap" rel="stylesheet">
+    
+    <style>
+        /* ==========================================
+           [1] ธีมสี (Refined Cyberpunk)
+           ========================================== */
+        :root {
+            --bg-dark: #010503;        
+            --text-main: #ffffff;      
+            --text-muted: #9eb8aa;     
+            --neon-green: #00ff66;     
+            --neon-yellow: #ffea00;    
+            --glass-bg: rgba(2, 10, 5, 0.45); 
+        }
+
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: var(--bg-dark); }
+        ::-webkit-scrollbar-thumb { background: var(--neon-green); border-radius: 10px; }
+
+        body, html {
+            margin: 0; padding: 0;
+            background-color: var(--bg-dark); color: var(--text-main);
+            font-family: 'Sarabun', sans-serif;
+            overflow-x: hidden; scroll-behavior: smooth;
+            -webkit-font-smoothing: antialiased;
+            /* เอา cursor: none; ออก เพื่อให้เมาส์กลับมาเป็นปกติ */
+        }
+
+        #progress-bar {
+            position: fixed; top: 0; left: 0; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--neon-green), var(--neon-yellow));
+            width: 0%; z-index: 9998; box-shadow: 0 0 10px var(--neon-green);
+        }
+
+        /* --- Loading Screen --- */
+        #loading {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background-color: var(--bg-dark); color: var(--neon-green);
+            z-index: 9999; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; transition: opacity 0.6s ease;
+        }
+        .cyber-spinner {
+            margin-top: 20px; width: 45px; height: 45px;
+            border: 2px solid rgba(255,255,255,0.05);
+            border-top-color: var(--neon-green); border-right-color: var(--neon-yellow);
+            border-radius: 50%; animation: spin 0.8s cubic-bezier(0.4, 0.0, 0.2, 1) infinite;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* ==========================================
+           [2] Layout โซน 3D ล้วนๆ (หน้าแรกสุด)
+           ========================================== */
+        #canvas-container {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; pointer-events: none; 
+        }
+
+        .content-container { position: relative; z-index: 10; }
+
+        /* ปล่อยหน้า Hero ให้โล่งสนิทเพื่อ 3D */
+        #hero {
+            position: relative; height: 100vh; width: 100vw;
+            display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
+            padding-bottom: 5vh; box-sizing: border-box;
+        }
+
+        /* ==========================================
+           [3] ส่วนเนื้อหาและตู้กระจก
+           ========================================== */
+        .scroll-section:not(#hero) {
+            min-height: 100vh; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; 
+            padding: 10vh 5% 5vh 5%; position: relative;
+        }
+
+        .intro-header { text-align: center; width: 100%; max-width: 900px; margin-bottom: 40px; }
+
+        .cyber-badge {
+            display: inline-block; padding: 4px 18px; margin-bottom: 15px;
+            border-bottom: 1px solid rgba(0, 255, 102, 0.4); color: var(--neon-green);
+            font-size: 0.8rem; font-weight: 600; letter-spacing: 5px; text-transform: uppercase;
+        }
+
+        .intro-header h1 {
+            font-size: clamp(2.2rem, 5vw, 4.5rem); font-weight: 800;
+            margin: 0 0 10px 0; letter-spacing: 1px; color: var(--text-main);
+            text-shadow: 0 5px 15px rgba(0,0,0,0.8); line-height: 1.2;
+        }
+
+        .intro-header h1 .highlight { color: var(--neon-yellow); text-shadow: 0 0 15px rgba(255,234,0,0.4); }
+
+        .intro-header p {
+            font-size: clamp(1rem, 1.5vw, 1.2rem); font-weight: 300;
+            color: var(--text-muted); margin: 0 auto; line-height: 1.6; max-width: 700px;
+        }
+
+        .glass-panel {
+            max-width: 900px; width: 100%; text-align: center;
+            background: var(--glass-bg); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+            border: 1px solid rgba(255,255,255,0.03);
+            border-top: 1px solid rgba(0, 255, 102, 0.4); border-bottom: 1px solid rgba(255, 234, 0, 0.4);
+            border-radius: 12px; padding: 50px 60px; position: relative; overflow: hidden;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.8); transition: transform 0.4s ease, border-color 0.4s ease;
+        }
+        .glass-panel::before {
+            content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.02), transparent);
+            transform: skewX(-20deg); transition: 0.6s;
+        }
+        .glass-panel:hover::before { left: 150%; }
+        .glass-panel:hover {
+            transform: translateY(-4px); border-color: rgba(255,234,0,0.3);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.9), 0 0 30px rgba(0, 255, 102, 0.1);
+        }
+
+        h2 { font-size: 2.2rem; margin-top: 0; font-weight: 500; color: var(--text-main); letter-spacing: 1px; }
+        h2 .hl-green { color: var(--neon-green); text-shadow: 0 0 10px rgba(0,255,102,0.3); }
+        h2 .hl-yellow { color: var(--neon-yellow); text-shadow: 0 0 10px rgba(255,234,0,0.3); }
+        .glass-panel p { line-height: 1.8; font-size: 1.1rem; color: #b0c2b8; margin-bottom: 15px; font-weight: 300; }
+
+        .reveal { opacity: 0; transform: translateY(30px); transition: all 1s cubic-bezier(0.2, 0.8, 0.2, 1); }
+        .visible .reveal { opacity: 1; transform: translateY(0); }
+        .d-1 { transition-delay: 0.1s; } .d-2 { transition-delay: 0.2s; } .d-3 { transition-delay: 0.3s; }
+
+        #history .glass-panel { text-align: left; border-left: 2px solid var(--neon-green); border-right: none; }
+        #history .intro-header { text-align: left; margin-left: 0; }
+        #vision { align-items: flex-end; }
+        #vision .glass-panel { text-align: right; border-right: 2px solid var(--neon-yellow); border-left: none; }
+
+        .cinematic-space { height: 50vh; pointer-events: none; } 
+        .spacer { height: 15vh; }
+    </style>
+</head>
+<body>
+
+    <div id="progress-bar"></div>
+
+    <div id="loading">
+        <h3 id="loading-text" style="margin:0; font-weight: 400; letter-spacing: 3px;">SYSTEM BOOTING...</h3>
+        <div class="cyber-spinner"></div>
+    </div>
+
+    <!-- โซน 3D เรนเดอร์ -->
+    <div id="canvas-container"></div>
+
+    <div class="content-container">
+        
+        <!-- Section 1 (Hero) โล่งๆ ไม่มีอะไรบัง 3D -->
+        <section id="hero" class="scroll-section">
+        </section>
+
+        <!-- Cinematic Space -->
+        <div class="cinematic-space"></div>
+
+        <!-- Section 2 -->
+        <section id="history" class="scroll-section">
+            <div class="intro-header">
+                <div class="reveal d-1 cyber-badge">ESTABLISHED 2024</div>
+                <h1 class="reveal d-2">สถาบันการศึกษา<span class="highlight">แห่งอนาคต</span></h1>
+                <p class="reveal d-3">ก้าวข้ามขีดจำกัดของมนุษย์ สู่มิติใหม่แห่งการเรียนรู้ที่ขับเคลื่อนด้วยเทคโนโลยีล้ำยุค สัมผัสประสบการณ์ไซเบอร์สเปซเต็มรูปแบบ</p>
+            </div>
+            
+            <div class="glass-panel">
+                <h2 class="reveal d-1">วิวัฒนาการ<span class="hl-green">ระดับสากล</span></h2>
+                <p class="reveal d-2">จากจุดเริ่มต้นของความมุ่งมั่น เราผสานสุนทรียภาพแห่งความคลาสสิกเข้ากับเทคโนโลยีสมัยใหม่ สร้างสรรค์พื้นที่ที่ทุกตารางนิ้วคือโอกาสในการเติบโต</p>
+                <p class="reveal d-3">เราคือชุมชนของผู้ที่มองไปข้างหน้าเสมอ พร้อมด้วยทรัพยากรระดับเวิลด์คลาสที่จะเปลี่ยนวิสัยทัศน์ให้กลายเป็นความจริง</p>
+            </div>
+        </section>
+
+        <!-- Section 3 -->
+        <section id="vision" class="scroll-section">
+            <div class="glass-panel">
+                <h2 class="reveal d-1">วิสัยทัศน์<span class="hl-yellow">ไร้พรมแดน</span></h2>
+                <p class="reveal d-2">"เราไม่ได้เพียงแค่สอน แต่เราสร้างสถาปนิกผู้ออกแบบอนาคตของมนุษยชาติ ผ่านความเข้าใจที่ลึกซึ้งในวิทยาการและนวัตกรรม"</p>
+                <p class="reveal d-3">ก้าวไปสู่ความสำเร็จที่ยั่งยืน พร้อมคุณธรรมและความเป็นผู้นำที่สง่างามในโลกไซเบอร์</p>
+            </div>
+        </section>
+        
+        <div class="spacer"></div>
+    </div>
+
+    <script>
+        function closeLoading() {
+            const ls = document.getElementById('loading');
+            if(ls && ls.style.display !== 'none') {
+                ls.style.opacity = '0'; 
+                setTimeout(() => { ls.style.display='none'; document.getElementById('hero').classList.add('visible'); }, 500);
+            }
+        }
+        // ระบบป้องกันหน้าจอค้าง ตัดจบที่ 6 วินาที
+        setTimeout(closeLoading, 6000);
+
+        try {
+            // --- 1. ตั้งค่า 3D 120FPS ---
+            const scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x010503, 0.02);
+
+            const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 200);
+            camera.position.z = window.innerWidth < 600 ? 25 : 18; 
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); 
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            const mainGroup = new THREE.Group(); scene.add(mainGroup);
+            const hoverGroup = new THREE.Group(); mainGroup.add(hoverGroup);
+            const spinGroup = new THREE.Group(); hoverGroup.add(spinGroup);
+            const logoGroup = new THREE.Group(); spinGroup.add(logoGroup);
+
+            // ==========================================
+            // 2. พื้นหลังสุดอลังการ (Smoke + Pixel Wind)
+            // ==========================================
+
+            // 2.1 สร้างควันโฮโลแกรม (Procedural Volumetric Smoke)
+            function createSmokeTexture() {
+                const cvs = document.createElement('canvas');
+                cvs.width = 128; cvs.height = 128;
+                const ctx = cvs.getContext('2d');
+                const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+                gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+                gradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.5)');
+                gradient.addColorStop(0.8, 'rgba(255, 255, 255, 0.05)');
+                gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                ctx.fillStyle = gradient; ctx.fillRect(0, 0, 128, 128);
+                return new THREE.CanvasTexture(cvs);
+            }
+
+            const smokeGeo = new THREE.BufferGeometry();
+            const smokeCount = 80; 
+            const smokePos = new Float32Array(smokeCount * 3);
+            const smokeColors = new Float32Array(smokeCount * 3);
+            const cSmokeGreen = new THREE.Color(0x00ff66);
+            const cSmokeDark = new THREE.Color(0x011a0a); 
+
+            for(let i=0; i<smokeCount; i++) {
+                smokePos[i*3] = (Math.random()-0.5)*40;
+                smokePos[i*3+1] = (Math.random()-0.5)*40;
+                smokePos[i*3+2] = (Math.random()-0.5)*20 - 15; 
+                
+                let c = Math.random() > 0.5 ? cSmokeGreen : cSmokeDark;
+                smokeColors[i*3] = c.r; smokeColors[i*3+1] = c.g; smokeColors[i*3+2] = c.b;
+            }
+            smokeGeo.setAttribute('position', new THREE.BufferAttribute(smokePos, 3));
+            smokeGeo.setAttribute('color', new THREE.BufferAttribute(smokeColors, 3));
+            
+            const smokeMat = new THREE.PointsMaterial({ 
+                size: 25, map: createSmokeTexture(), vertexColors: true, 
+                transparent: true, opacity: 0.15, blending: THREE.AdditiveBlending, depthWrite: false 
+            });
+            const smokeParticles = new THREE.Points(smokeGeo, smokeMat);
+            mainGroup.add(smokeParticles);
+
+            // 2.2 พายุพิกเซล (Hyper-speed Pixel Wind)
+            const pGeo = new THREE.BufferGeometry();
+            const pCount = 600; 
+            const pPos = new Float32Array(pCount * 3);
+            const pColor = new Float32Array(pCount * 3);
+            const cWhite = new THREE.Color(0xffffff);
+            const cGreen = new THREE.Color(0x00ff66); 
+
+            for(let i=0; i<pCount; i++) {
+                pPos[i*3] = (Math.random()-0.5)*70; 
+                pPos[i*3+1] = (Math.random()-0.5)*70; 
+                pPos[i*3+2] = (Math.random()-0.5)*60; 
+                
+                let c = Math.random() > 0.8 ? cGreen : cWhite;
+                pColor[i*3] = c.r; pColor[i*3+1] = c.g; pColor[i*3+2] = c.b;
+            }
+            pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+            pGeo.setAttribute('color', new THREE.BufferAttribute(pColor, 3));
+            const pMat = new THREE.PointsMaterial({ size: 0.08, vertexColors: true, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
+            const pixelWind = new THREE.Points(pGeo, pMat);
+            mainGroup.add(pixelWind);
+
+            let logoMats = [];
+
+            // --- 3. โหลดโลโก้ (ทรงเดิม คมชัดเป๊ะ) ---
+            const userImageUrl = 'https://img2.pic.in.th/IMG_9084.png';
+            
+            function buildLogo(tex) {
+                tex.minFilter = THREE.LinearFilter;
+                tex.magFilter = THREE.LinearFilter;
+
+                const aspect = tex.image.width / tex.image.height;
+                const h = window.innerWidth < 600 ? 8.0 : 9.0; 
+                const w = h * aspect; 
+                
+                const geo = new THREE.PlaneGeometry(w, h, 1, 1);
+                const layers = 40; 
+                const depth = 0.4; 
+
+                const faceM = new THREE.MeshBasicMaterial({ 
+                    color: 0xffffff, map: tex, transparent: true, alphaTest: 0.1, side: THREE.DoubleSide
+                });
+                
+                const edgeM = new THREE.MeshStandardMaterial({ 
+                    color: 0x010804, map: tex, transparent: true, alphaTest: 0.1, 
+                    roughness: 0.3, metalness: 0.9, side: THREE.DoubleSide 
+                });
+                
+                logoMats.push(faceM, edgeM);
+
+                for(let i=0; i<layers; i++) {
+                    const m = new THREE.Mesh(geo, (i===0 || i===layers-1) ? faceM : edgeM);
+                    m.position.z = (i/layers)*depth - (depth/2);
+                    logoGroup.add(m);
+                }
+                closeLoading();
+            }
+
+            // ระบบดึงรูปอัจฉริยะ 
+            const proxies = [
+                `https://wsrv.nl/?url=${encodeURIComponent(userImageUrl)}&output=png`,
+                `https://api.allorigins.win/raw?url=${userImageUrl}`,
+                `https://corsproxy.io/?${userImageUrl}`
+            ];
+
+            function tryLoadLogo(index) {
+                if(index >= proxies.length) {
+                    const cvs = document.createElement('canvas'); cvs.width=400; cvs.height=600; const ctx=cvs.getContext('2d');
+                    ctx.strokeStyle='#fff'; ctx.lineWidth=10; ctx.strokeRect(20,20,360,560);
+                    ctx.fillStyle='#fff'; ctx.font='bold 180px Arial'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('HS',200,300);
+                    buildLogo(new THREE.CanvasTexture(cvs));
+                    return; 
+                }
+                const texLoader = new THREE.TextureLoader(); texLoader.crossOrigin = "Anonymous";
+                texLoader.load( proxies[index], (tex) => buildLogo(tex), undefined, () => tryLoadLogo(index + 1) );
+            }
+            tryLoadLogo(0);
+
+            // --- 4. จัดไฟเฉพาะขอบ (Rim Light) ---
+            scene.add(new THREE.AmbientLight(0xffffff, 0.2)); 
+            
+            const greenRim = new THREE.PointLight(0x00ff66, 6.0, 30); 
+            greenRim.position.set(-5, 2, -2); scene.add(greenRim);
+
+            const yellowRim = new THREE.PointLight(0xffea00, 5.0, 30); 
+            yellowRim.position.set(5, -2, -2); scene.add(yellowRim);
+
+            // --- 5. Scroll Logic ---
+            let sp = 0; const pb = document.getElementById('progress-bar');
+            window.addEventListener('scroll', () => {
+                requestAnimationFrame(() => {
+                    const sy = window.scrollY; 
+                    const ms = document.documentElement.scrollHeight - window.innerHeight;
+                    sp = sy / Math.max(1, ms);
+                    pb.style.width = `${sp*100}%`;
+                    
+                    document.querySelectorAll('.scroll-section').forEach(s => {
+                        if(s.getBoundingClientRect().top < window.innerHeight*0.85) s.classList.add('visible');
+                    });
+                });
+            }, { passive: true });
+
+            // --- 6. Animation Loop ---
+            const clock = new THREE.Clock();
+            
+            function animate() {
+                requestAnimationFrame(animate);
+                const et = clock.getElapsedTime();
+                
+                // โลโก้อยู่กึ่งกลางเป๊ะ (Y=0)
+                hoverGroup.position.y = Math.sin(et * 1.2) * 0.15; 
+                hoverGroup.position.x = Math.sin(et * 0.6) * 0.1;
+                
+                // หมุนนิ่งๆ โชว์ความงาม
+                spinGroup.rotation.y += 0.005; 
+                
+                // แอนิเมชันตีลังกาตอนเลื่อนจอ
+                mainGroup.rotation.x = sp * Math.PI * 1.2; 
+                mainGroup.rotation.y = sp * Math.PI * 2.0; 
+                
+                mainGroup.position.y = sp * 10;
+                mainGroup.position.z = sp * -15; 
+
+                const baseZ = window.innerWidth < 600 ? 25 : 18; 
+                camera.position.z = baseZ + (sp * 8); 
+
+                // =========================================================
+                // แอนิเมชันควัน & พายุพิกเซล
+                // =========================================================
+                smokeParticles.rotation.z = et * 0.1;
+                smokeParticles.rotation.y = et * 0.05;
+
+                const pos = pixelWind.geometry.attributes.position.array;
+                for(let i=1; i<pCount*3; i+=3) { 
+                    pos[i+1] += 0.3; // Z-axis พุ่งทะลุกล้อง
+                    pos[i] -= 0.02;  // Y-axis ลอยลง
+                    if(pos[i+1] > 20) pos[i+1] = -40; // วนกลับไปเกิดใหม่
+                    if(pos[i] < -30) pos[i] = 30;
+                }
+                pixelWind.geometry.attributes.position.needsUpdate = true;
+
+                // โลโก้ค่อยๆ จางหาย
+                if(logoMats.length > 0) {
+                    let o = 1 - (sp * 2.5); 
+                    o = Math.max(0, Math.min(1, o));
+                    logoMats.forEach(m => { m.opacity = o; m.visible = o > 0; });
+                    smokeMat.opacity = (o * 0.15); // ควันหายพร้อมโลโก้
+                }
+
+                renderer.render(scene, camera);
+            }
+            animate();
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        } catch(e) { console.error(e); }
+    </script>
+</body>
+</html>
+
+
+```
